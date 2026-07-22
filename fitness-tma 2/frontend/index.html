@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>FitApp — фитнес в Telegram</title>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          tg: {
+            bg: 'var(--tg-theme-bg-color, #0a0c10)',
+            text: 'var(--tg-theme-text-color, #ffffff)',
+            hint: 'var(--tg-theme-hint-color, #8a8f98)',
+            secondary: 'var(--tg-theme-secondary-bg-color, #14171d)',
+          },
+          accent: '#00e5a0',
+        },
+      },
+    },
+  }
+</script>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-tg-bg text-tg-text font-sans">
+
+  <div id="app" class="max-w-md mx-auto px-4 pt-4 app-scroll">
+
+    <!-- ======== ЗАГРУЗКА ======== -->
+    <div id="screen-loading" class="flex flex-col items-center justify-center" style="height:80vh">
+      <div class="w-16 h-16 rounded-3xl bg-accent/15 flex items-center justify-center mb-4 animate-pulse-soft">
+        <i data-lucide="dumbbell" class="w-8 h-8 text-accent"></i>
+      </div>
+      <p class="text-tg-hint text-sm">Привет, <span id="loading-name"></span> 👋 загружаем профиль...</p>
+    </div>
+
+    <!-- ======== ОНБОРДИНГ ======== -->
+    <div id="screen-onboarding" class="hidden pb-10">
+      <div id="onboarding-steps"></div>
+    </div>
+
+    <!-- ======== ГЛАВНАЯ ======== -->
+    <div id="screen-home" class="hidden space-y-4 pb-4">
+      <div class="flex items-center justify-between animate-in">
+        <div class="flex items-center gap-3 min-w-0">
+          <div id="home-avatar" class="w-12 h-12 rounded-2xl overflow-hidden shrink-0 bg-white/5"></div>
+          <div class="min-w-0">
+            <p class="text-tg-hint text-xs">С возвращением,</p>
+            <h1 class="text-lg font-bold truncate" id="home-nickname">Атлет</h1>
+          </div>
+        </div>
+        <div class="level-badge shrink-0">
+          <span id="home-level-num">1</span>
+        </div>
+      </div>
+
+      <div id="home-title-badge"></div>
+
+      <div class="glass-card rounded-3xl p-4 animate-in">
+        <div class="flex justify-between text-xs mb-2">
+          <span class="font-medium">Опыт</span>
+          <span id="home-xp-text" class="text-tg-hint">0 / 100 XP</span>
+        </div>
+        <div class="xp-track">
+          <div id="home-xp-bar" class="xp-fill" style="width:0%"></div>
+        </div>
+        <div class="flex items-center gap-1.5 mt-3 text-xs text-tg-hint">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i>
+          Серия: <span id="home-streak" class="font-semibold text-tg-text">0</span> дн. подряд
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 animate-in">
+        <div class="glass-card rounded-2xl p-4">
+          <div class="w-8 h-8 rounded-xl bg-accent/15 flex items-center justify-center mb-2">
+            <i data-lucide="flame" class="w-4 h-4 text-accent"></i>
+          </div>
+          <p class="text-xl font-bold" id="home-calories">—</p>
+          <p class="text-[11px] text-tg-hint">ккал/день</p>
+        </div>
+        <div class="glass-card rounded-2xl p-4">
+          <div class="w-8 h-8 rounded-xl bg-accent/15 flex items-center justify-center mb-2">
+            <i data-lucide="activity" class="w-4 h-4 text-accent"></i>
+          </div>
+          <p class="text-xl font-bold" id="home-bmi">—</p>
+          <p class="text-[11px] text-tg-hint">ИМТ</p>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-4 animate-in">
+        <p class="text-xs text-tg-hint mb-3 font-medium">БЖУ на сегодня</p>
+        <div class="flex justify-between text-center">
+          <div><p class="text-lg font-bold" id="home-protein">—</p><p class="text-[10px] text-tg-hint">Белки</p></div>
+          <div><p class="text-lg font-bold" id="home-fat">—</p><p class="text-[10px] text-tg-hint">Жиры</p></div>
+          <div><p class="text-lg font-bold" id="home-carbs">—</p><p class="text-[10px] text-tg-hint">Углеводы</p></div>
+        </div>
+      </div>
+
+      <button onclick="Workouts.reset(); Screens.show('workout-log')" class="w-full btn-primary animate-in">
+        <i data-lucide="play" class="w-5 h-5"></i> Начать тренировку
+      </button>
+      <button onclick="AI.openGenerator()" class="w-full btn-secondary animate-in">
+        <i data-lucide="sparkles" class="w-5 h-5"></i> Сгенерировать тренировку с ИИ
+      </button>
+      <button onclick="Screens.show('premium')" class="w-full btn-gold animate-in">
+        <i data-lucide="crown" class="w-5 h-5"></i> FitApp Premium
+      </button>
+    </div>
+
+    <!-- ======== ПРОФИЛЬ ======== -->
+    <div id="screen-profile" class="hidden space-y-4 pb-4">
+      <h1 class="text-2xl font-bold animate-in">Профиль</h1>
+
+      <div class="glass-card rounded-3xl p-4 flex items-center gap-4 animate-in">
+        <label class="relative shrink-0">
+          <div id="profile-avatar-box" class="w-20 h-20 rounded-3xl overflow-hidden bg-white/5"></div>
+          <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-accent flex items-center justify-center border-2 border-tg-bg">
+            <i data-lucide="camera" class="w-3.5 h-3.5 text-black"></i>
+          </div>
+          <input type="file" accept="image/*" class="hidden" onchange="Profile.onAvatarPick(this)">
+        </label>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-tg-hint mb-1">Никнейм</p>
+          <input id="profile-nickname" class="input-field w-full" placeholder="Твой ник" onblur="Profile.saveNickname()">
+        </div>
+      </div>
+
+      <h2 class="text-lg font-bold pt-1 animate-in">Замеры тела</h2>
+      <div id="charts-empty" class="glass-card rounded-2xl p-6 text-center text-tg-hint text-sm hidden">
+        Добавь первый замер, чтобы увидеть график прогресса
+      </div>
+      <div id="charts-wrap" class="hidden space-y-3">
+        <div class="glass-card rounded-2xl p-3" style="height:200px"><canvas id="chart-weight"></canvas></div>
+        <div class="glass-card rounded-2xl p-3" style="height:200px"><canvas id="chart-body"></canvas></div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-4 space-y-2 animate-in">
+        <p class="font-semibold text-sm mb-1 flex items-center gap-2"><i data-lucide="ruler" class="w-4 h-4 text-accent"></i> Добавить замер</p>
+        <div class="grid grid-cols-2 gap-2">
+          <input id="m-weight" type="number" placeholder="Вес, кг" class="input-field">
+          <input id="m-waist" type="number" placeholder="Талия, см" class="input-field">
+          <input id="m-biceps" type="number" placeholder="Бицепс, см" class="input-field">
+          <input id="m-hips" type="number" placeholder="Бёдра, см" class="input-field">
+          <input id="m-chest" type="number" placeholder="Грудь, см" class="input-field">
+        </div>
+        <button onclick="Measurements.add()" class="w-full btn-primary mt-1">
+          <i data-lucide="plus" class="w-4 h-4"></i> Записать
+        </button>
+      </div>
+
+      <h2 class="text-lg font-bold pt-1 animate-in">Титулы</h2>
+      <div id="profile-titles" class="space-y-2"></div>
+
+      <h2 class="text-lg font-bold pt-1 animate-in">Достижения</h2>
+      <div id="achievements-list" class="grid grid-cols-2 gap-2"></div>
+    </div>
+
+    <!-- ======== БАЗА УПРАЖНЕНИЙ ======== -->
+    <div id="screen-exercises" class="hidden space-y-3 pb-4">
+      <h1 class="text-2xl font-bold animate-in">База упражнений</h1>
+      <div class="relative animate-in">
+        <i data-lucide="search" class="w-4 h-4 text-tg-hint absolute left-3 top-1/2 -translate-y-1/2"></i>
+        <input id="exercise-search" oninput="Exercises.search()" placeholder="Поиск упражнения..." class="input-field w-full pl-9">
+      </div>
+      <div id="muscle-filters" class="flex gap-2 overflow-x-auto pb-1 animate-in"></div>
+      <div id="exercises-list" class="space-y-2"></div>
+      <button onclick="Exercises.openAddModal()" class="w-full btn-secondary">
+        <i data-lucide="plus-circle" class="w-5 h-5"></i> Добавить своё упражнение
+      </button>
+    </div>
+
+    <!-- ======== ЗАПИСЬ ТРЕНИРОВКИ ======== -->
+    <div id="screen-workout-log" class="hidden space-y-3 pb-4">
+      <div class="flex items-center justify-between animate-in">
+        <button onclick="Screens.show('home')" class="w-9 h-9 rounded-full glass-card-flat flex items-center justify-center">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+        <h1 class="text-lg font-bold">Тренировка</h1>
+        <div class="w-9"></div>
+      </div>
+
+      <input id="workout-title" placeholder="Название (напр. Грудь/Трицепс)" class="input-field w-full">
+      <div id="workout-entries" class="space-y-3"></div>
+
+      <button onclick="Workouts.openExercisePicker()" class="w-full btn-secondary">
+        <i data-lucide="plus-circle" class="w-5 h-5"></i> Добавить упражнение
+      </button>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="Workouts.startRestTimer(60)" class="btn-chip"><i data-lucide="timer" class="w-4 h-4"></i> 60 сек</button>
+        <button onclick="Workouts.startRestTimer(90)" class="btn-chip"><i data-lucide="timer" class="w-4 h-4"></i> 90 сек</button>
+      </div>
+      <button onclick="Workouts.save()" class="w-full btn-primary">
+        <i data-lucide="check-circle-2" class="w-5 h-5"></i> Завершить и сохранить
+      </button>
+    </div>
+
+    <!-- ======== ИСТОРИЯ ======== -->
+    <div id="screen-history" class="hidden space-y-3 pb-4">
+      <h1 class="text-2xl font-bold animate-in">История</h1>
+      <div id="history-calendar" class="grid grid-cols-7 gap-1 glass-card rounded-2xl p-3 animate-in"></div>
+      <div id="history-list" class="space-y-2"></div>
+    </div>
+
+    <!-- ======== ПЛАНЫ ======== -->
+    <div id="screen-plans" class="hidden space-y-3 pb-4">
+      <h1 class="text-2xl font-bold animate-in">Планы тренировок</h1>
+
+      <div class="glass-card rounded-2xl p-4 animate-in">
+        <p class="font-semibold mb-2 text-sm flex items-center gap-2"><i data-lucide="calendar-plus" class="w-4 h-4 text-accent"></i> Создать день тренировки</p>
+        <input id="plan-day-name" placeholder="Напр. День А: Грудь/Трицепс" class="input-field w-full mb-2">
+        <button onclick="Plans.openExercisePicker()" class="w-full btn-chip mb-2">Выбрать упражнения</button>
+        <div id="plan-selected-exercises" class="mb-2"></div>
+        <button onclick="Plans.saveDay()" class="w-full btn-primary">Сохранить день</button>
+      </div>
+
+      <h2 class="font-bold text-sm text-tg-hint uppercase tracking-wide">Мои дни</h2>
+      <div id="plans-days-list" class="space-y-2"></div>
+
+      <h2 class="font-bold text-sm text-tg-hint uppercase tracking-wide pt-2">Расписание на неделю</h2>
+      <div id="plans-schedule" class="space-y-2"></div>
+
+      <button onclick="Plans.aiSuggestWeek()" class="w-full btn-secondary">
+        <i data-lucide="sparkles" class="w-5 h-5"></i> Предложить план недели с ИИ
+      </button>
+      <div id="ai-week-result" class="space-y-2 hidden"></div>
+    </div>
+
+    <!-- ======== PREMIUM ======== -->
+    <div id="screen-premium" class="hidden space-y-4 pb-4">
+      <div class="flex items-center gap-3 animate-in">
+        <button onclick="Screens.show('home')" class="w-9 h-9 rounded-full glass-card-flat flex items-center justify-center">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+        <h1 class="text-2xl font-bold">FitApp Premium</h1>
+      </div>
+
+      <div class="premium-hero rounded-3xl p-6 animate-in">
+        <div class="w-16 h-16 rounded-3xl bg-white/15 backdrop-blur flex items-center justify-center mb-4">
+          <i data-lucide="crown" class="w-8 h-8 text-white"></i>
+        </div>
+        <div id="premium-status-box" class="mb-5 text-white"></div>
+        <ul class="text-sm space-y-2 text-white/90">
+          <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4"></i> Безлимитная ИИ-генерация тренировок</li>
+          <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4"></i> Планнер привычек и фитнес-задач</li>
+          <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4"></i> Расширенная аналитика прогресса</li>
+          <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4"></i> Эксклюзивные достижения</li>
+        </ul>
+      </div>
+
+      <button id="premium-buy-btn" onclick="Payments.buyPremium()" class="w-full btn-gold animate-in">
+        <i data-lucide="star" class="w-5 h-5"></i> Активировать за <span id="premium-price">100</span> ⭐
+      </button>
+
+      <div class="glass-card rounded-2xl p-4 animate-in">
+        <p class="font-semibold mb-2 text-sm flex items-center gap-2"><i data-lucide="ticket" class="w-4 h-4 text-accent"></i> Есть промокод?</p>
+        <div class="flex gap-2">
+          <input id="promo-input" placeholder="Введи промокод" class="input-field flex-1">
+          <button onclick="Payments.redeemPromo()" class="btn-primary !w-auto px-5">Ок</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== ПРИВЫЧКИ (PREMIUM) ======== -->
+    <div id="screen-habits" class="hidden space-y-3 pb-4">
+      <h1 class="text-2xl font-bold animate-in">Планнер привычек</h1>
+
+      <div id="habits-locked" class="hidden">
+        <div class="relative rounded-3xl overflow-hidden">
+          <div class="blur-[8px] opacity-40 pointer-events-none select-none space-y-2 p-1">
+            <div class="glass-card-flat rounded-2xl p-3 flex items-center gap-3"><div class="w-9 h-9 rounded-xl bg-accent/20"></div><span class="text-sm">Выпить 2л воды</span></div>
+            <div class="glass-card-flat rounded-2xl p-3 flex items-center gap-3"><div class="w-9 h-9 rounded-xl bg-accent/20"></div><span class="text-sm">Сделать разминку</span></div>
+            <div class="glass-card-flat rounded-2xl p-3 flex items-center gap-3"><div class="w-9 h-9 rounded-xl bg-accent/20"></div><span class="text-sm">Лечь спать до 23:00</span></div>
+          </div>
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center px-8 bg-tg-bg/40">
+            <div class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center mb-3">
+              <i data-lucide="lock" class="w-7 h-7 text-white"></i>
+            </div>
+            <p class="font-bold mb-1">Доступно с Premium</p>
+            <p class="text-xs text-tg-hint mb-4">Отслеживай полезные привычки и получай XP каждый день</p>
+            <button onclick="Screens.show('premium')" class="btn-gold !w-auto px-6">
+              <i data-lucide="star" class="w-4 h-4"></i> Активировать за 100 ⭐
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="habits-unlocked" class="hidden space-y-3">
+        <div id="habits-list" class="space-y-2"></div>
+        <button onclick="Habits.openAddModal()" class="w-full btn-secondary">
+          <i data-lucide="plus-circle" class="w-5 h-5"></i> Добавить привычку
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ======== МОДАЛКА ВЫБОРА УПРАЖНЕНИЯ ======== -->
+  <div id="exercise-picker-modal" class="hidden modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="font-bold text-lg">Выбери упражнение</h2>
+        <button onclick="Modal.close()" class="w-8 h-8 rounded-full glass-card-flat flex items-center justify-center"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <input id="picker-search" oninput="Modal.renderPickerList()" placeholder="Поиск..." class="input-field w-full mb-3">
+      <div id="picker-list" class="space-y-2 overflow-y-auto" style="max-height:55vh"></div>
+    </div>
+  </div>
+
+  <!-- ======== МОДАЛКА: СВОЁ УПРАЖНЕНИЕ ======== -->
+  <div id="add-exercise-modal" class="hidden modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="font-bold text-lg">Своё упражнение</h2>
+        <button onclick="Exercises.closeAddModal()" class="w-8 h-8 rounded-full glass-card-flat flex items-center justify-center"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <input id="new-ex-name" placeholder="Название упражнения" class="input-field w-full mb-2">
+      <select id="new-ex-group" class="input-field w-full mb-2"></select>
+      <select id="new-ex-equipment" class="input-field w-full mb-3">
+        <option value="barbell">Штанга</option><option value="dumbbell">Гантели</option>
+        <option value="machine">Тренажёр</option><option value="cable">Блок</option>
+        <option value="bodyweight">Своё тело</option><option value="other">Другое</option>
+      </select>
+      <button onclick="Exercises.submitNew()" class="w-full btn-primary">Добавить</button>
+    </div>
+  </div>
+
+  <!-- ======== МОДАЛКА: ИИ-ГЕНЕРАЦИЯ ======== -->
+  <div id="ai-generate-modal" class="hidden modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="font-bold text-lg">ИИ подберёт тренировку</h2>
+        <button onclick="AI.closeGenerator()" class="w-8 h-8 rounded-full glass-card-flat flex items-center justify-center"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <p class="text-xs text-tg-hint mb-2 font-medium">Где тренируешься?</p>
+      <div class="flex gap-2 mb-4">
+        <button class="chip pill-location chip-active" onclick="AI.selectPill('location','gym',this)">🏋️ Зал</button>
+        <button class="chip pill-location" onclick="AI.selectPill('location','home',this)">🏠 Дом</button>
+      </div>
+      <p class="text-xs text-tg-hint mb-2 font-medium">Как самочувствие?</p>
+      <div class="flex gap-2 mb-5">
+        <button class="chip pill-feeling" onclick="AI.selectPill('feeling','tired',this)">😴 Устал</button>
+        <button class="chip pill-feeling chip-active" onclick="AI.selectPill('feeling','normal',this)">🙂 Норм</button>
+        <button class="chip pill-feeling" onclick="AI.selectPill('feeling','great',this)">🔥 Огонь</button>
+      </div>
+      <button onclick="AI.generate()" class="w-full btn-primary"><i data-lucide="sparkles" class="w-5 h-5"></i> Сгенерировать</button>
+    </div>
+  </div>
+
+  <!-- ======== МОДАЛКА: НОВАЯ ПРИВЫЧКА ======== -->
+  <div id="add-habit-modal" class="hidden modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="font-bold text-lg">Новая привычка</h2>
+        <button onclick="Habits.closeAddModal()" class="w-8 h-8 rounded-full glass-card-flat flex items-center justify-center"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <input id="new-habit-title" placeholder="Напр. Выпить 2л воды" class="input-field w-full mb-3">
+      <p class="text-xs text-tg-hint mb-2 font-medium">Иконка</p>
+      <div class="flex gap-2 flex-wrap mb-4">
+        <button class="chip habit-icon-pick chip-active" onclick="Habits.selectIcon('droplet',this)"><i data-lucide="droplet" class="w-4 h-4"></i></button>
+        <button class="chip habit-icon-pick" onclick="Habits.selectIcon('moon',this)"><i data-lucide="moon" class="w-4 h-4"></i></button>
+        <button class="chip habit-icon-pick" onclick="Habits.selectIcon('footprints',this)"><i data-lucide="footprints" class="w-4 h-4"></i></button>
+        <button class="chip habit-icon-pick" onclick="Habits.selectIcon('salad',this)"><i data-lucide="salad" class="w-4 h-4"></i></button>
+        <button class="chip habit-icon-pick" onclick="Habits.selectIcon('book-open',this)"><i data-lucide="book-open" class="w-4 h-4"></i></button>
+        <button class="chip habit-icon-pick" onclick="Habits.selectIcon('sparkles',this)"><i data-lucide="sparkles" class="w-4 h-4"></i></button>
+      </div>
+      <button onclick="Habits.submitNew()" class="w-full btn-primary">Добавить</button>
+    </div>
+  </div>
+
+  <!-- ======== CELEBRATE OVERLAY ======== -->
+  <div id="celebrate-overlay" class="hidden modal-overlay modal-overlay-center"></div>
+
+  <!-- ======== TOAST ======== -->
+  <div id="toast" class="hidden toast"></div>
+
+  <!-- ======== ТАЙМЕР ОТДЫХА (плавающий) ======== -->
+  <div id="rest-timer" class="hidden rest-timer-float" onclick="Workouts.stopRestTimer()">
+    <svg viewBox="0 0 44 44" class="rest-ring" id="rest-timer-ring">
+      <circle cx="22" cy="22" r="19" class="rest-ring-bg"/>
+      <circle cx="22" cy="22" r="19" class="rest-ring-fg"/>
+    </svg>
+    <span id="rest-timer-text" class="rest-timer-text">00:00</span>
+  </div>
+
+  <!-- ======== НИЖНЯЯ НАВИГАЦИЯ ======== -->
+  <div id="bottom-nav" class="hidden bottom-nav">
+    <div class="max-w-md mx-auto grid grid-cols-5">
+      <button id="nav-home" onclick="Screens.show('home')" class="nav-btn"><i data-lucide="home" class="w-5 h-5"></i><span>Главная</span></button>
+      <button id="nav-exercises" onclick="Screens.show('exercises')" class="nav-btn"><i data-lucide="book-open" class="w-5 h-5"></i><span>Упражнения</span></button>
+      <button id="nav-history" onclick="Screens.show('history')" class="nav-btn"><i data-lucide="calendar-days" class="w-5 h-5"></i><span>История</span></button>
+      <button id="nav-plans" onclick="Screens.show('plans')" class="nav-btn"><i data-lucide="clipboard-list" class="w-5 h-5"></i><span>Планы</span></button>
+      <button id="nav-profile" onclick="Screens.show('profile')" class="nav-btn"><i data-lucide="user" class="w-5 h-5"></i><span>Профиль</span></button>
+    </div>
+  </div>
+  <button onclick="Screens.show('habits')" class="fab-habits">
+    <i data-lucide="list-checks" class="w-5 h-5"></i>
+  </button>
+
+<script src="/js/telegram.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/titles.js"></script>
+<script src="/js/screens.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/onboarding.js"></script>
+<script src="/js/profile.js"></script>
+<script src="/js/exercises.js"></script>
+<script src="/js/workouts.js"></script>
+<script src="/js/history.js"></script>
+<script src="/js/plans.js"></script>
+<script src="/js/payments.js"></script>
+<script src="/js/habits.js"></script>
+<script src="/js/app.js"></script>
+<script>window.lucide?.createIcons();</script>
+</body>
+</html>
